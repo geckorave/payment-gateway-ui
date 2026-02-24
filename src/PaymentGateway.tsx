@@ -14,6 +14,9 @@ export interface PaymentProps {
     onError?: (error: any) => void;
     onClose?: () => void;
     successCallbackDelayMs?: number;
+    baseUrl?: string;
+    paymentTabs?: Array<"card" | "transfer">;
+    defaultTab?: "card" | "transfer";
     callback_url: string;
     reference?: string;
     title?: string;
@@ -29,6 +32,14 @@ type InitState =
 
 type ActiveTab = "card" | "transfer";
 type CardNextAction = "none" | "otp" | "redirect" | "success";
+
+const DEFAULT_BASE_URL = "https://api.geckorave.com/api/v1/gecko-pay/payment/widget";
+
+const normalizePaymentTabs = (tabs?: Array<"card" | "transfer">): ActiveTab[] => {
+    const source = Array.isArray(tabs) && tabs.length > 0 ? tabs : ["card", "transfer"];
+    const unique = Array.from(new Set(source)).filter((tab): tab is ActiveTab => tab === "card" || tab === "transfer");
+    return unique.length > 0 ? unique : ["card", "transfer"];
+};
 
 const initRequestCache = new Map<string, Promise<any>>();
 
@@ -169,9 +180,11 @@ const isValidExpiry = (value: string) => {
 };
 
 export const PaymentGateway: React.FC<PaymentProps> = ({
-    publicKey, firstName, lastName, email, phone, amount, customData, onSuccess, onError, onClose, successCallbackDelayMs = 5000, callback_url, reference, title, description, logo, currency,
+    publicKey, firstName, lastName, email, phone, amount, customData, onSuccess, onError, onClose, successCallbackDelayMs = 5000, baseUrl, paymentTabs, defaultTab, callback_url, reference, title, description, logo, currency,
 }) => {
-    const baseURL = "https://api.geckorave.com/api/v1/gecko-pay/payment/widget";
+    const baseURL = (baseUrl ?? "").trim() || DEFAULT_BASE_URL;
+    const availableTabs = useMemo(() => normalizePaymentTabs(paymentTabs), [paymentTabs]);
+    const preferredDefaultTab: ActiveTab | null = defaultTab === "card" || defaultTab === "transfer" ? defaultTab : null;
 
     const inputClass = "w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-gray-900 outline-none transition focus:border-[#6c3244] focus:ring-2 focus:ring-[#6c3244]/20";
     const primaryBtn = "w-full rounded-xl bg-[#6c3244] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#552637] disabled:cursor-not-allowed disabled:opacity-60";
@@ -180,7 +193,9 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
     const [init, setInit] = useState<InitState>({status: "idle"});
     const [isDismissed, setIsDismissed] = useState(false);
     const [overlay, setOverlay] = useState(false);
-    const [active, setActive] = useState<ActiveTab>("card");
+    const [active, setActive] = useState<ActiveTab>(() => (
+        preferredDefaultTab && availableTabs.includes(preferredDefaultTab) ? preferredDefaultTab : availableTabs[0]
+    ));
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [successMsg, setSuccessMsg] = useState<string | null>(null);
     const [transactionId, setTransactionId] = useState<string | null>(null);
@@ -256,6 +271,11 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
         }, 1000);
         return () => window.clearInterval(timer);
     }, [transferVerifyCooldownSec]);
+
+    useEffect(() => {
+        if (availableTabs.includes(active)) return;
+        setActive(preferredDefaultTab && availableTabs.includes(preferredDefaultTab) ? preferredDefaultTab : availableTabs[0]);
+    }, [active, availableTabs, preferredDefaultTab]);
 
     const clearCardRedirectTimers = () => {
         if (cardRedirectTimerRef.current !== null) {
@@ -724,17 +744,27 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
                     <aside className="border-b border-gray-200 bg-gradient-to-b from-[#f8eef2] via-[#fbf6f8] to-white p-4 md:col-span-4 md:border-b-0 md:border-r">
                         <div className="mb-4">
                             <div className="text-[11px] font-semibold uppercase tracking-[0.07em] text-gray-500">Payment Method</div>
-                            <div className="mt-1 text-sm text-gray-700">Choose your preferred way to pay.</div>
+                            <div className="mt-1 text-sm text-gray-700">
+                                {availableTabs.length > 1
+                                    ? "Choose your preferred way to pay."
+                                    : availableTabs[0] === "card"
+                                        ? "Card payment is enabled for this checkout."
+                                        : "Bank transfer is enabled for this checkout."}
+                            </div>
                         </div>
                         <div className="space-y-2">
-                            <button type="button" onClick={() => { resetCardAuthFlow(); setActive("card"); setCardStep(1); setErrorMsg(null); setSuccessMsg(null); }} className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${active === "card" ? "border-[#6c3244]/25 bg-white text-[#6c3244] shadow-sm" : "border-transparent bg-white/70 text-gray-700 hover:border-gray-200 hover:bg-white"}`}>
-                                <div className="text-sm font-semibold">Card Payment</div>
-                                <div className="text-xs text-gray-500">Pay with card details securely.</div>
-                            </button>
-                            <button type="button" onClick={() => { resetCardAuthFlow(); setActive("transfer"); setTransferStep(1); setErrorMsg(null); setSuccessMsg(null); }} className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${active === "transfer" ? "border-[#6c3244]/25 bg-white text-[#6c3244] shadow-sm" : "border-transparent bg-white/70 text-gray-700 hover:border-gray-200 hover:bg-white"}`}>
-                                <div className="text-sm font-semibold">Bank Transfer</div>
-                                <div className="text-xs text-gray-500">Generate account and transfer funds.</div>
-                            </button>
+                            {availableTabs.includes("card") && (
+                                <button type="button" onClick={() => { resetCardAuthFlow(); setActive("card"); setCardStep(1); setErrorMsg(null); setSuccessMsg(null); }} className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${active === "card" ? "border-[#6c3244]/25 bg-white text-[#6c3244] shadow-sm" : "border-transparent bg-white/70 text-gray-700 hover:border-gray-200 hover:bg-white"}`}>
+                                    <div className="text-sm font-semibold">Card Payment</div>
+                                    <div className="text-xs text-gray-500">Pay with card details securely.</div>
+                                </button>
+                            )}
+                            {availableTabs.includes("transfer") && (
+                                <button type="button" onClick={() => { resetCardAuthFlow(); setActive("transfer"); setTransferStep(1); setErrorMsg(null); setSuccessMsg(null); }} className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${active === "transfer" ? "border-[#6c3244]/25 bg-white text-[#6c3244] shadow-sm" : "border-transparent bg-white/70 text-gray-700 hover:border-gray-200 hover:bg-white"}`}>
+                                    <div className="text-sm font-semibold">Bank Transfer</div>
+                                    <div className="text-xs text-gray-500">Generate account and transfer funds.</div>
+                                </button>
+                            )}
                         </div>
                         <div className="mt-5 rounded-xl border border-gray-200 bg-white/80 p-3">
                             <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-gray-500">Customer</div>
