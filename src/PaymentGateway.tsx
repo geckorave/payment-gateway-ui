@@ -1,5 +1,6 @@
 import styles from "./tailwind.css?inline";
 import React, {useEffect, useMemo, useRef, useState} from "react";
+import {createPortal} from "react-dom";
 import axios, {AxiosError} from "axios";
 
 export interface PaymentProps {
@@ -182,6 +183,10 @@ const isValidExpiry = (value: string) => {
 export const PaymentGateway: React.FC<PaymentProps> = ({
     publicKey, firstName, lastName, email, phone, amount, customData, onSuccess, onError, onClose, successCallbackDelayMs = 5000, baseUrl, paymentTabs, defaultTab, callback_url, reference, title, description, logo, currency,
 }) => {
+    const renderInPortal = (node: React.ReactNode) => (
+        typeof document !== "undefined" ? createPortal(node, document.body) : <>{node}</>
+    );
+
     const baseURL = (baseUrl ?? "").trim() || DEFAULT_BASE_URL;
     const availableTabs = useMemo(() => normalizePaymentTabs(paymentTabs), [paymentTabs]);
     const preferredDefaultTab: ActiveTab | null = defaultTab === "card" || defaultTab === "transfer" ? defaultTab : null;
@@ -690,14 +695,16 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
 
     if (init.status === "loading" || init.status === "idle") {
         if (isDismissed) return null;
-        return <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gradient-to-br from-slate-900/60 via-slate-900/55 to-[#6c3244]/50 backdrop-blur"><Spinner/></div>;
+        return renderInPortal(
+            <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-gradient-to-br from-slate-900/60 via-slate-900/55 to-[#6c3244]/50 backdrop-blur"><Spinner/></div>
+        );
     }
 
     if (isDismissed) return null;
 
     if (init.status === "error") {
-        return (
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gradient-to-br from-slate-900/60 via-slate-900/55 to-[#6c3244]/50 backdrop-blur">
+        return renderInPortal(
+            <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-gradient-to-br from-slate-900/60 via-slate-900/55 to-[#6c3244]/50 backdrop-blur">
                 <div className="mx-4 max-w-md rounded-3xl border border-white/20 bg-white p-6 shadow-2xl">
                     <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{init.error}</div>
                     <button
@@ -714,8 +721,8 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
         );
     }
 
-    return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gradient-to-br from-slate-900/60 via-slate-900/55 to-[#6c3244]/50 px-2 backdrop-blur">
+    return renderInPortal(
+        <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-gradient-to-br from-slate-900/60 via-slate-900/55 to-[#6c3244]/50 px-2 backdrop-blur">
             {overlay && <div className="absolute inset-0 flex items-center justify-center bg-black/45"><Spinner/></div>}
             <div className="mx-3 w-full max-w-4xl overflow-hidden rounded-3xl border border-white/30 bg-white/95 shadow-[0_25px_80px_-25px_rgba(15,23,42,0.6)]">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-6 py-4">
