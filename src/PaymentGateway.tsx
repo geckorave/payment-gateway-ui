@@ -96,7 +96,7 @@ const ReadonlyRow = ({label, value}: { label: string; value: string }) => (
 );
 
 const DEFAULT_LOGO = (
-    <div className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-[#6c3244] via-[#8f425c] to-[#4f2231] text-sm font-bold text-white shadow-md">
+    <div className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-gray-600 via-gray-700 to-gray-900 text-sm font-bold text-white shadow-md">
         GR
     </div>
 );
@@ -191,8 +191,8 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
     const availableTabs = useMemo(() => normalizePaymentTabs(paymentTabs), [paymentTabs]);
     const preferredDefaultTab: ActiveTab | null = defaultTab === "card" || defaultTab === "transfer" ? defaultTab : null;
 
-    const inputClass = "w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-gray-900 outline-none transition focus:border-[#6c3244] focus:ring-2 focus:ring-[#6c3244]/20";
-    const primaryBtn = "w-full rounded-xl bg-[#6c3244] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#552637] disabled:cursor-not-allowed disabled:opacity-60";
+    const inputClass = "w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-500/20";
+    const primaryBtn = "w-full rounded-xl bg-gray-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60";
     const secondaryBtn = "rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50";
 
     const [init, setInit] = useState<InitState>({status: "idle"});
@@ -696,7 +696,7 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
     if (init.status === "loading" || init.status === "idle") {
         if (isDismissed) return null;
         return renderInPortal(
-            <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-gradient-to-br from-slate-900/60 via-slate-900/55 to-[#6c3244]/50 backdrop-blur"><Spinner/></div>
+            <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-gradient-to-br from-gray-900/60 via-gray-800/55 to-gray-700/50 backdrop-blur"><Spinner/></div>
         );
     }
 
@@ -704,7 +704,7 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
 
     if (init.status === "error") {
         return renderInPortal(
-            <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-gradient-to-br from-slate-900/60 via-slate-900/55 to-[#6c3244]/50 backdrop-blur">
+            <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-gradient-to-br from-gray-900/60 via-gray-800/55 to-gray-700/50 backdrop-blur">
                 <div className="mx-4 max-w-md rounded-3xl border border-white/20 bg-white p-6 shadow-2xl">
                     <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{init.error}</div>
                     <button
@@ -722,7 +722,7 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
     }
 
     return renderInPortal(
-        <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-gradient-to-br from-slate-900/60 via-slate-900/55 to-[#6c3244]/50 px-2 backdrop-blur">
+        <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-gradient-to-br from-gray-900/60 via-gray-800/55 to-gray-700/50 px-2 backdrop-blur">
             {overlay && <div className="absolute inset-0 flex items-center justify-center bg-black/45"><Spinner/></div>}
             <div className="mx-3 w-full max-w-4xl overflow-hidden rounded-3xl border border-white/30 bg-white/95 shadow-[0_25px_80px_-25px_rgba(15,23,42,0.6)]">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-6 py-4">
@@ -748,7 +748,7 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
                     </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-12">
-                    <aside className="border-b border-gray-200 bg-gradient-to-b from-[#f8eef2] via-[#fbf6f8] to-white p-4 md:col-span-4 md:border-b-0 md:border-r">
+                    <aside className="border-b border-gray-200 bg-gradient-to-b from-gray-100 via-gray-50 to-white p-4 md:col-span-4 md:border-b-0 md:border-r">
                         <div className="mb-4">
                             <div className="text-[11px] font-semibold uppercase tracking-[0.07em] text-gray-500">Payment Method</div>
                             <div className="mt-1 text-sm text-gray-700">
@@ -761,13 +761,13 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
                         </div>
                         <div className="space-y-2">
                             {availableTabs.includes("card") && (
-                                <button type="button" onClick={() => { resetCardAuthFlow(); setActive("card"); setCardStep(1); setErrorMsg(null); setSuccessMsg(null); }} className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${active === "card" ? "border-[#6c3244]/25 bg-white text-[#6c3244] shadow-sm" : "border-transparent bg-white/70 text-gray-700 hover:border-gray-200 hover:bg-white"}`}>
+                                <button type="button" onClick={() => { resetCardAuthFlow(); setActive("card"); setCardStep(1); setErrorMsg(null); setSuccessMsg(null); }} className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${active === "card" ? "border-gray-400 bg-white text-gray-800 shadow-sm" : "border-transparent bg-white/70 text-gray-700 hover:border-gray-200 hover:bg-white"}`}>
                                     <div className="text-sm font-semibold">Card Payment</div>
                                     <div className="text-xs text-gray-500">Pay with card details securely.</div>
                                 </button>
                             )}
                             {availableTabs.includes("transfer") && (
-                                <button type="button" onClick={() => { resetCardAuthFlow(); setActive("transfer"); setTransferStep(1); setErrorMsg(null); setSuccessMsg(null); }} className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${active === "transfer" ? "border-[#6c3244]/25 bg-white text-[#6c3244] shadow-sm" : "border-transparent bg-white/70 text-gray-700 hover:border-gray-200 hover:bg-white"}`}>
+                                <button type="button" onClick={() => { resetCardAuthFlow(); setActive("transfer"); setTransferStep(1); setErrorMsg(null); setSuccessMsg(null); }} className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${active === "transfer" ? "border-gray-400 bg-white text-gray-800 shadow-sm" : "border-transparent bg-white/70 text-gray-700 hover:border-gray-200 hover:bg-white"}`}>
                                     <div className="text-sm font-semibold">Bank Transfer</div>
                                     <div className="text-xs text-gray-500">Generate account and transfer funds.</div>
                                 </button>
@@ -804,8 +804,8 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
                             {active === "card" ? (
                                 <>
                                     <div className="mb-4 flex items-center gap-2">
-                                        <div className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${cardStep === 1 ? "bg-[#6c3244] text-white" : "bg-gray-200 text-gray-600"}`}>1. Card Details</div>
-                                        <div className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${cardStep === 2 ? "bg-[#6c3244] text-white" : "bg-gray-200 text-gray-600"}`}>2. Authorize</div>
+                                        <div className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${cardStep === 1 ? "bg-gray-700 text-white" : "bg-gray-200 text-gray-600"}`}>1. Card Details</div>
+                                        <div className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${cardStep === 2 ? "bg-gray-700 text-white" : "bg-gray-200 text-gray-600"}`}>2. Authorize</div>
                                     </div>
                                     {cardStep === 1 ? (
                                         <div>
@@ -975,8 +975,8 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
                             ) : (
                                 <>
                                     <div className="mb-4 flex items-center gap-2">
-                                        <div className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${transferStep === 1 ? "bg-[#6c3244] text-white" : "bg-gray-200 text-gray-600"}`}>1. Generate Account</div>
-                                        <div className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${transferStep === 2 ? "bg-[#6c3244] text-white" : "bg-gray-200 text-gray-600"}`}>2. Confirm Transfer</div>
+                                        <div className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${transferStep === 1 ? "bg-gray-700 text-white" : "bg-gray-200 text-gray-600"}`}>1. Generate Account</div>
+                                        <div className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${transferStep === 2 ? "bg-gray-700 text-white" : "bg-gray-200 text-gray-600"}`}>2. Confirm Transfer</div>
                                     </div>
                                     {transferStep === 1 ? (
                                         <div>
