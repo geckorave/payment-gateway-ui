@@ -1,6 +1,6 @@
 {
   "name": "geckorave-payment-sdk",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "This is an reactJS library for implementing Geckorave payment gateway.",
   "license": "MIT",
   "type": "module",
@@ -69,5 +69,5 @@
     "Fintech",
     "Nigeria"
   ],
-   "author": "Ayodeji Oke"
+  "author": "Ayodeji Oke"
 }
