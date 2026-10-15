@@ -195,6 +195,22 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
     const primaryBtn = "w-full rounded-xl bg-gray-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60";
     const secondaryBtn = "rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50";
 
+    const [payableAmount, setPayableAmount] = useState(amount);
+    const [completed, setCompleted] = useState(false);
+    const [methodLocked, setMethodLocked] = useState(false);
+    const busyRef = useRef(false);
+    const completedRef = useRef(false);
+    const warnOnLeave = useRef(false);
+    useEffect(() => {
+        const warn = (event: BeforeUnloadEvent) => {
+            if (!warnOnLeave.current || completedRef.current) return;
+            event.preventDefault();
+            event.returnValue = "";
+        };
+        window.addEventListener("beforeunload", warn);
+        return () => window.removeEventListener("beforeunload", warn);
+    }, []);
+
     const [init, setInit] = useState<InitState>({status: "idle"});
     const [isDismissed, setIsDismissed] = useState(false);
     const [overlay, setOverlay] = useState(false);
@@ -257,7 +273,7 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
     }, []);
 
     useEffect(() => {
-        if (isDismissed) return;
+        if (isDismissed) { warnOnLeave.current = false; return; }
 
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key !== "Escape") return;
@@ -302,16 +318,61 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
         setCardOtp("");
     };
 
+    const clearCompletedTransaction = () => {
+        completedRef.current = true;
+        warnOnLeave.current = false;
+        setCompleted(true);
+        clearCardRedirectTimers();
+        setTransactionId(null);
+        setInit({status: "success", data: null});
+        setCardNumber(""); setExpiry(""); setCvv(""); setPin(""); setCardOtp("");
+        setBankDetails(null);
+        setCardSuccessData(null);
+        setTransferVerifyCooldownSec(0);
+        setCardRedirectUrl(null);
+    };
+
+    const switchMethod = async (next: ActiveTab) => {
+        if (next === active || busyRef.current || overlay || completedRef.current || methodLocked) return;
+        busyRef.current = true;
+        setOverlay(true);
+        setErrorMsg(null);
+        try {
+            const {data} = await client.post("/initialize", {
+                public_key: publicKey, reference: paymentReference, amount, currency, callback_url,
+                customer: {first_name: firstName, last_name: lastName, email, phone},
+                custom_data: customData ?? {}, payment_method: next === "transfer" ? "bank_transfer" : "card",
+            });
+            const plain = data?.data ?? data;
+            const total = Number(plain?.amount ?? plain?.amount_minor);
+            if (!Number.isFinite(total) || total <= 0) throw new Error("Unable to load payment charges.");
+            if (completedRef.current) return;
+            setPayableAmount(total);
+            setActive(next);
+            resetCardAuthFlow();
+            setCardNumber(""); setExpiry(""); setCvv(""); setPin("");
+            setCardStep(1); setTransferStep(1); setBankDetails(null);
+            setSuccessMsg(null);
+        } catch (err: any) {
+            setErrorMsg(err?.response?.data?.message || err.message || "Unable to update payment charges.");
+        } finally {
+            busyRef.current = false;
+            setOverlay(false);
+        }
+    };
+
     const showCardSuccessState = (payload: any, message?: string) => {
         clearCardRedirectTimers();
         setCardNextAction("success");
-        setCardSuccessData(payload);
+        setCardSuccessData({reference: payload?.reference, card: payload?.card});
         setCardOtp("");
         setCardRedirectUrl(null);
         setSuccessMsg(message || payload?.message || "Payment successful.");
     };
 
     const queueSuccessCallback = (payload: any) => {
+        if (completedRef.current) return;
+        clearCompletedTransaction();
         if (successCallbackTimerRef.current !== null) {
             window.clearTimeout(successCallbackTimerRef.current);
         }
@@ -333,6 +394,7 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
         }, 1000);
 
         cardRedirectTimerRef.current = window.setTimeout(() => {
+            warnOnLeave.current = false;
             window.location.assign(url);
         }, 5000);
     };
@@ -340,11 +402,13 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
     useEffect(() => {
         let mounted = true;
         const initPayment = async () => {
+            if (completedRef.current) return;
             setInit({status: "loading"});
             setErrorMsg(null);
             setSuccessMsg(null);
             try {
                 const payload = {
+                    payment_method: active === "transfer" ? "bank_transfer" : "card",
                     public_key: publicKey,
                     amount,
                     currency,
@@ -390,6 +454,9 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
                     plain?.data?.reference ||
                     plain?.reference ||
                     null;
+                const total = Number(plain?.amount ?? plain?.amount_minor);
+                if (!Number.isFinite(total) || total <= 0) throw new Error("Unable to load payment charges.");
+                setPayableAmount(total);
                 setTransactionId(tId);
                 setInit({status: "success", data: plain});
             } catch (err) {
@@ -428,6 +495,7 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
     const canSubmitCard = cardStepOneValid && pinValid;
 
     const submit = async (method: "card" | "transfer") => {
+        if (busyRef.current || overlay || completedRef.current || !transactionId) return;
         if (method === "card") {
             if (!cardNumberValid) {
                 setErrorMsg("Please enter a valid card number.");
@@ -443,6 +511,8 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
             }
         }
 
+        warnOnLeave.current = true;
+        setMethodLocked(true);
         setOverlay(true);
         setErrorMsg(null);
         setSuccessMsg(null);
@@ -454,7 +524,7 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
                 transaction_id: transactionId,
                 reference: paymentReference,
                 method,
-                amount,
+                amount: payableAmount,
                 currency,
                 customer: {
                     first_name: firstName,
@@ -504,8 +574,7 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
                 }
             }
 
-            setSuccessMsg("Payment successful.");
-            queueSuccessCallback(plain);
+            setErrorMsg(plain?.message || "Payment has not been confirmed yet.");
         } catch (err) {
             const e = err as AxiosError<any>;
             const msg = (e.response?.data as any)?.message || e.message || "Payment failed. Please try again.";
@@ -608,13 +677,7 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
                 setTransferVerified(true);
                 setTransferVerifyCooldownSec(0);
                 setSuccessMsg("Transfer confirmed successfully. Transaction is complete.");
-                if (successCallbackTimerRef.current !== null) {
-                    window.clearTimeout(successCallbackTimerRef.current);
-                }
-                successCallbackTimerRef.current = window.setTimeout(() => {
-                    onSuccess?.(plain);
-                    successCallbackTimerRef.current = null;
-                }, Math.max(0, successCallbackDelayMs));
+                queueSuccessCallback(plain);
                 return;
             }
 
@@ -636,6 +699,7 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
     };
 
     const proceedBank = async () => {
+        if (busyRef.current || overlay || completedRef.current) return;
         if (!transactionId) {
             setErrorMsg("Transaction could not be initialized. Please retry.");
             return;
@@ -643,6 +707,8 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
         setOverlay(true);
         setErrorMsg(null);
         setSuccessMsg(null);
+        warnOnLeave.current = true;
+        setMethodLocked(true);
         setTransferVerified(false);
         setTransferVerifyCooldownSec(0);
         try {
@@ -650,7 +716,7 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
                 transaction_id: transactionId,
                 reference: paymentReference,
                 method: "transfer",
-                amount,
+                amount: payableAmount,
                 currency,
                 customer: {
                     first_name: firstName,
@@ -681,6 +747,8 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
                 return;
             }
 
+            const total = Number(bankPayload?.amount_minor);
+            if (Number.isFinite(total) && total > 0) setPayableAmount(total);
             setBankDetails(bt);
             setTransferStep(2);
             setSuccessMsg("Bank account generated successfully. Complete the transfer using the details below.");
@@ -692,6 +760,16 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
             setOverlay(false);
         }
     };
+
+    if (completed && !isDismissed) {
+        return renderInPortal(<div className="fixed inset-0 z-[2147483647] grid place-items-center bg-black/50">
+            <div role="dialog" aria-modal="true" className="rounded-2xl bg-white p-8 text-center">
+                <h2 className="text-xl font-semibold text-emerald-700">Payment successful</h2>
+                <p className="mt-2 text-sm text-gray-600">Your payment has been confirmed.</p>
+                <button type="button" className={secondaryBtn + " mt-4"} onClick={() => { setIsDismissed(true); onClose?.(); }}>Close</button>
+            </div>
+        </div>);
+    }
 
     if (init.status === "loading" || init.status === "idle") {
         if (isDismissed) return null;
@@ -723,7 +801,7 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
 
     return renderInPortal(
         <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-gradient-to-br from-gray-900/60 via-gray-800/55 to-gray-700/50 px-2 backdrop-blur">
-            {overlay && <div className="absolute inset-0 flex items-center justify-center bg-black/45"><Spinner/></div>}
+            {overlay && <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/45"><Spinner/></div>}
             <div className="mx-3 w-full max-w-4xl overflow-hidden rounded-3xl border border-white/30 bg-white/95 shadow-[0_25px_80px_-25px_rgba(15,23,42,0.6)]">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-6 py-4">
                     <div>
@@ -743,7 +821,7 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
                         </div>
                         <div className="rounded-xl border border-gray-200 bg-white p-2.5 text-right shadow-sm">
                             <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-gray-500">Total Amount</div>
-                            <div className="text-sm font-bold text-gray-900">{formatAmount(amount, currency)}</div>
+                            <div className="text-sm font-bold text-gray-900">{formatAmount(payableAmount, currency)}</div>
                         </div>
                     </div>
                 </div>
@@ -761,13 +839,13 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
                         </div>
                         <div className="space-y-2">
                             {availableTabs.includes("card") && (
-                                <button type="button" onClick={() => { resetCardAuthFlow(); setActive("card"); setCardStep(1); setErrorMsg(null); setSuccessMsg(null); }} className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${active === "card" ? "border-gray-400 bg-white text-gray-800 shadow-sm" : "border-transparent bg-white/70 text-gray-700 hover:border-gray-200 hover:bg-white"}`}>
+                                <button type="button" disabled={overlay || methodLocked || completed} onClick={() => switchMethod("card")} className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${active === "card" ? "border-gray-400 bg-white text-gray-800 shadow-sm" : "border-transparent bg-white/70 text-gray-700 hover:border-gray-200 hover:bg-white"}`}>
                                     <div className="text-sm font-semibold">Card Payment</div>
                                     <div className="text-xs text-gray-500">Pay with card details securely.</div>
                                 </button>
                             )}
                             {availableTabs.includes("transfer") && (
-                                <button type="button" onClick={() => { resetCardAuthFlow(); setActive("transfer"); setTransferStep(1); setErrorMsg(null); setSuccessMsg(null); }} className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${active === "transfer" ? "border-gray-400 bg-white text-gray-800 shadow-sm" : "border-transparent bg-white/70 text-gray-700 hover:border-gray-200 hover:bg-white"}`}>
+                                <button type="button" disabled={overlay || methodLocked || completed} onClick={() => switchMethod("transfer")} className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${active === "transfer" ? "border-gray-400 bg-white text-gray-800 shadow-sm" : "border-transparent bg-white/70 text-gray-700 hover:border-gray-200 hover:bg-white"}`}>
                                     <div className="text-sm font-semibold">Bank Transfer</div>
                                     <div className="text-xs text-gray-500">Generate account and transfer funds.</div>
                                 </button>
@@ -790,7 +868,7 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
                             </div>
                             <div className="rounded-xl border border-gray-200 bg-white p-3 text-right shadow-sm">
                                 <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-gray-500">Total Amount</div>
-                                <div className="text-base font-bold text-gray-900">{formatAmount(amount, currency)}</div>
+                                <div className="text-base font-bold text-gray-900">{formatAmount(payableAmount, currency)}</div>
                                 <div className="max-w-[220px] truncate text-xs text-gray-500">{email}</div>
                             </div>
                         </div>
@@ -849,7 +927,7 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
                                                 </div>
                                             </div>
                                             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                                <ReadonlyRow label="Amount" value={formatAmount(amount, currency)}/>
+                                                <ReadonlyRow label="Amount" value={formatAmount(payableAmount, currency)}/>
                                                 <ReadonlyRow label="Reference" value={String(cardSuccessData?.reference || paymentReference)}/>
                                                 <ReadonlyRow label="Card Brand" value={String(cardSuccessData?.card?.brand || cardTypeLabel || "Card")}/>
                                                 <ReadonlyRow label="Card Last 4" value={String(cardSuccessData?.card?.last4 || cardDigits.slice(-4) || "****")}/>
@@ -908,6 +986,7 @@ export const PaymentGateway: React.FC<PaymentProps> = ({
                                                     type="button"
                                                     onClick={() => {
                                                         if (cardRedirectUrl) {
+                                                            warnOnLeave.current = false;
                                                             window.location.assign(cardRedirectUrl);
                                                         }
                                                     }}
